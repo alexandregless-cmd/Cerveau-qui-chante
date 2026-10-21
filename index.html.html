@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Le cerveau qui chante – 3D</title>
+<style>
+:root{--bg:#faf8f5;--fg:#1f2430;--mut:#5d6575;--card:#fff;--line:#d9d4cb;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14161c;--fg:#eceae6;--mut:#a3a9b6;--card:#1d2028;--line:#343845;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#14161c;--fg:#eceae6;--mut:#a3a9b6;--card:#1d2028;--line:#343845;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.5}
+main{max-width:980px;margin:0 auto;padding:20px 16px 40px}
+h1{font-size:1.6rem;margin:0 0 4px}.sub{color:var(--mut);margin:0 0 14px}
+#stage{position:relative;height:min(62vh,520px);min-height:340px;background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;touch-action:none;cursor:grab}
+#stage canvas{display:block;width:100%;height:100%}
+#tip{position:absolute;pointer-events:none;max-width:270px;background:var(--card);color:var(--fg);border:2px solid var(--line);border-radius:10px;padding:8px 11px;font-size:.85rem;box-shadow:0 4px 16px rgba(0,0,0,.25);display:none}
+#tip b{display:block;font-size:.95rem}#tip small{color:var(--mut)}
+.bar{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+.bar button{padding:7px 12px;border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:9px;cursor:pointer;font-size:.85rem}
+.leg{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:.85rem;margin-bottom:8px}
+.leg i{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:5px}
+#info{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 14px;min-height:56px;font-size:.92rem}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.chips span{font-size:.8rem;padding:4px 10px;border-radius:99px;border:1px solid var(--line);cursor:pointer;background:var(--card)}
+.note{font-size:.8rem;color:var(--mut);margin-top:14px}
+</style></head><body><main>
+<h1>Le cerveau qui chante, en 3D</h1>
+<p class="sub">Faites pivoter le cerveau avec la souris (ou le doigt) et passez le pointeur sur une zone colorée pour découvrir son rôle quand on chante.</p>
+<div class="leg" id="leg"></div>
+<div id="stage"><div id="tip"></div></div>
+<div class="bar"><button id="rot">⏸ Pause de la rotation</button><button id="tr">Cerveau plus transparent</button><button id="rs">Recentrer</button></div>
+<div id="info">Survolez une zone pour lire son explication.</div>
+<div class="chips" id="chips"></div>
+<p class="note">Schéma simplifié : formes et positions approximatives, à but pédagogique ; le chant mobilise les deux hémisphères, les zones latérales sont donc dessinées des deux côtés. Sources : Zarate (2013), <i>Frontiers in Human Neuroscience</i> ; González-García &amp; Rendón (2017), <i>JoVE</i> ; Whitehead &amp; Armony (2018), <i>Human Brain Mapping</i> ; Gourévitch (2020), <i>Les Cahiers de l’audition</i>.</p>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const G={cmd:[0xe5484d,"Commander la voix"],aud:[0x3b82f6,"Entendre sa voix"],sens:[0xf59e0b,"Sentir sa voix"],lnk:[0x8b5cf6,"Relier et corriger"],emo:[0x10b981,"Émotion et déclenchement"]};
+const hex=c=>"#"+c.toString(16).padStart(6,"0");
+const sf=(y,z)=>0.45+0.62*Math.sqrt(Math.max(0,1-y*y/.64-z*z/1.69))+0.02;
+const Z=[
+{g:"cmd",t:"Cortex moteur",d:"Envoie les ordres aux muscles du larynx, des lèvres et de la langue. Sa partie basse pilote directement la voix.",p:[sf(.5,.15),.5,.15],s:[.1,.3,.1],m:1},
+{g:"cmd",t:"Cortex prémoteur",d:"Prépare le geste : il transforme ce qu’on entend en ordre à exécuter (par exemple « monter d’une note »).",p:[sf(.5,.5),.5,.5],s:[.1,.25,.12],m:1},
+{g:"cmd",t:"Aire de Broca",d:"Organise les sons produits, en chant comme en parole.",p:[sf(.1,.8),.1,.8],s:[.1,.17,.17],m:1},
+{g:"aud",t:"Cortex auditif",d:"Analyse les sons : la hauteur des notes, le timbre de la voix. Il écoute le modèle à imiter et votre propre voix.",p:[sf(-.25,0),-.25,0],s:[.1,.1,.4],m:1},
+{g:"sens",t:"Cortex somatosensoriel",d:"Capte les sensations de la gorge, de la bouche et de la respiration. Les chanteurs expérimentés s’en servent beaucoup.",p:[sf(.5,-.2),.5,-.2],s:[.1,.3,.09],m:1},
+{g:"lnk",t:"Cortex pariétal",d:"Traduit l’information sonore (note trop haute ? trop basse ?) en information utile pour le geste vocal.",p:[sf(.45,-.65),.45,-.65],s:[.1,.15,.2],m:1},
+{g:"lnk",t:"Insula antérieure",d:"Carrefour caché dans un repli du cerveau : il relie ce qu’on entend, ce qu’on sent et ce qu’on commande.",p:[.78,-.08,.22],s:[.1,.14,.18],m:1},
+{g:"cmd",t:"Aire motrice supplémentaire",d:"Planifie la séquence des gestes avant de chanter.",p:[.1,.76,.1],s:[.1,.06,.25],m:1},
+{g:"lnk",t:"Cortex cingulaire antérieur",d:"Décide de lancer la voix et choisit l’ajustement à faire quand on se corrige (par exemple : on chante trop bas).",p:[.09,.36,.5],s:[.07,.09,.3],m:1},
+{g:"lnk",t:"Thalamus",d:"Relais central : il aiguille les sons et les sensations vers les bonnes zones du cortex.",p:[.17,0,-.05],s:[.14,.13,.18],m:1},
+{g:"cmd",t:"Putamen",d:"Fait partie des boucles qui fluidifient les mouvements de la voix.",p:[.5,-.04,.3],s:[.1,.13,.2],m:1},
+{g:"emo",t:"Amygdale",d:"Centre des émotions. Chanter des notes dissonantes (qui « grincent ») l’active davantage.",p:[.55,-.42,.32],s:[.1,.1,.1],m:1},
+{g:"emo",t:"Substance grise périaqueducale",d:"Petite zone du tronc cérébral qui peut déclencher la voix et la teinter d’émotion (cri, pleurs…).",p:[0,-.32,-.25],s:[.08,.08,.08]},
+{g:"cmd",t:"Cervelet",d:"Affine et coordonne la précision des mouvements, ici ceux de la voix.",p:[0,-.55,-1.0],s:[.7,.34,.4]}
+];
+const stage=document.getElementById("stage"),tip=document.getElementById("tip"),info=document.getElementById("info");
+document.getElementById("leg").innerHTML=Object.values(G).map(v=>`<span><i style="background:${hex(v[0])}"></i>${v[1]}</span>`).join("");
+try{
+const R=new THREE.WebGLRenderer({antialias:true,alpha:true});R.setPixelRatio(Math.min(devicePixelRatio,2));stage.appendChild(R.domElement);
+const S=new THREE.Scene(),C=new THREE.PerspectiveCamera(40,1,.1,50);C.position.set(0,.2,5.2);
+S.add(new THREE.AmbientLight(0xffffff,.65));const L=new THREE.DirectionalLight(0xffffff,.8);L.position.set(3,4,5);S.add(L);
+const B=new THREE.Group();S.add(B);
+let op=.34;const hm=[];
+for(const sx of[-1,1]){
+ const geo=new THREE.SphereGeometry(1,64,48),pos=geo.attributes.position;
+ for(let i=0;i<pos.count;i++){const x=pos.getX(i),y=pos.getY(i),z=pos.getZ(i),k=1+.04*Math.sin(9*x+3*y)*Math.sin(8*z+2*x);pos.setXYZ(i,x*k,y*k,z*k)}
+ geo.computeVertexNormals();
+ const m=new THREE.Mesh(geo,new THREE.MeshPhongMaterial({color:0xe8b8ac,transparent:true,opacity:op,depthWrite:false}));
+ m.scale.set(.62,.8,1.3);m.position.x=sx*.45;B.add(m);hm.push(m);
+}
+const stem=new THREE.Mesh(new THREE.CylinderGeometry(.14,.1,.9,20),new THREE.MeshPhongMaterial({color:0xcfa398,transparent:true,opacity:.7}));
+stem.position.set(0,-.7,-.4);stem.rotation.x=-.35;B.add(stem);
+const zm=[];
+Z.forEach((z,i)=>{
+ const xs=z.m?[1,-1]:[1];
+ xs.forEach(sx=>{
+  const me=new THREE.Mesh(new THREE.SphereGeometry(1,24,18),new THREE.MeshPhongMaterial({color:G[z.g][0],emissive:G[z.g][0],emissiveIntensity:.15,transparent:true,opacity:.95}));
+  me.scale.set(...z.s);me.position.set(z.p[0]*sx,z.p[1],z.p[2]);me.userData={i,base:z.s};B.add(me);zm.push(me);
+ });
+});
+let auto=true,hov=-1;
+const ry0=.9;B.rotation.y=ry0;B.rotation.x=.15;
+function setHov(i){
+ hov=i;zm.forEach(m=>{const on=m.userData.i===i,k=on?1.3:1;m.scale.set(m.userData.base[0]*k,m.userData.base[1]*k,m.userData.base[2]*k);m.material.emissiveIntensity=on?.7:.15});
+ if(i<0){info.innerHTML="Survolez une zone pour lire son explication.";return}
+ const z=Z[i];info.innerHTML=`<b style="color:${hex(G[z.g][0])}">${z.t}</b> <small style="color:var(--mut)">· ${G[z.g][1]}</small><br>${z.d}`;
+}
+function showTip(i,x,y){
+ if(i<0){tip.style.display="none";return}
+ const z=Z[i];tip.style.borderColor=hex(G[z.g][0]);
+ tip.innerHTML=`<b>${z.t}</b><small>${G[z.g][1]}</small><br>${z.d}`;tip.style.display="block";
+ const w=stage.clientWidth,tw=tip.offsetWidth,th=tip.offsetHeight;
+ tip.style.left=Math.max(6,Math.min(x+16,w-tw-6))+"px";tip.style.top=Math.max(6,Math.min(y+16,stage.clientHeight-th-6))+"px";
+}
+const ray=new THREE.Raycaster(),mv=new THREE.Vector2();
+function pick(e){
+ const r=R.domElement.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;
+ mv.set(x/r.width*2-1,-(y/r.height)*2+1);ray.setFromCamera(mv,C);
+ const h=ray.intersectObjects(zm);const i=h.length?h[0].object.userData.i:-1;
+ if(i!==hov)setHov(i);showTip(i,x,y);return i;
+}
+let drag=false,lx=0,ly=0,moved=0;
+const cv=R.domElement;
+cv.addEventListener("pointerdown",e=>{drag=true;moved=0;lx=e.clientX;ly=e.clientY;stage.style.cursor="grabbing"});
+addEventListener("pointerup",()=>{drag=false;stage.style.cursor="grab"});
+cv.addEventListener("pointermove",e=>{
+ if(drag){const dx=e.clientX-lx,dy=e.clientY-ly;lx=e.clientX;ly=e.clientY;moved+=Math.abs(dx)+Math.abs(dy);B.rotation.y+=dx*.01;B.rotation.x=Math.max(-1.2,Math.min(1.2,B.rotation.x+dy*.01))}
+ pick(e);
+});
+cv.addEventListener("pointerup",e=>{if(e.pointerType==="touch"&&moved<6)pick(e)});
+cv.addEventListener("pointerleave",()=>{if(!drag){setHov(-1);showTip(-1)}});
+cv.addEventListener("wheel",e=>{e.preventDefault();C.position.z=Math.max(3,Math.min(8,C.position.z+e.deltaY*.004))},{passive:false});
+document.getElementById("rot").onclick=function(){auto=!auto;this.textContent=auto?"⏸ Pause de la rotation":"▶ Reprendre la rotation"};
+document.getElementById("tr").onclick=function(){op=op>.2?.12:.34;this.textContent=op>.2?"Cerveau plus transparent":"Cerveau plus opaque";hm.forEach(m=>m.material.opacity=op)};
+document.getElementById("rs").onclick=()=>{B.rotation.set(.15,ry0,0);C.position.z=5.2};
+const ch=document.getElementById("chips");
+Z.forEach((z,i)=>{const s=document.createElement("span");s.textContent=z.t;s.style.borderColor=hex(G[z.g][0]);
+ s.onmouseenter=s.onclick=()=>setHov(i);s.onmouseleave=()=>setHov(-1);ch.appendChild(s)});
+function size(){const w=stage.clientWidth,h=stage.clientHeight;R.setSize(w,h);C.aspect=w/h;C.updateProjectionMatrix()}
+addEventListener("resize",size);size();
+(function loop(){requestAnimationFrame(loop);if(auto&&!drag&&hov<0)B.rotation.y+=.004;R.render(S,C)})();
+}catch(err){stage.innerHTML="<p style='padding:20px'>Votre navigateur ne permet pas d’afficher la 3D (WebGL indisponible).</p>"}
+</script></body></html>
